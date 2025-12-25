@@ -1,0 +1,613 @@
+{
+  "name": "Enrich Places via Google Places + Upsert to Sanity",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://maps.googleapis.com/maps/api/place/findplacefromtext/json",
+        "authentication": "none",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "input",
+              "value": "={{ $json.locationName + ' ' + ($json.city || 'Austin, TX') }}"
+            },
+            {
+              "name": "inputtype",
+              "value": "textquery"
+            },
+            {
+              "name": "fields",
+              "value": "place_id,name,formatted_address"
+            },
+            {
+              "name": "locationbias",
+              "value": "point:30.2672,-97.7431"
+            },
+            {
+              "name": "key",
+              "value": "={{ $env.GOOGLE_MAPS_API_KEY }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "google-find-place",
+      "name": "Google - Find Place",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract place_id from Google Find Place response\nconst c = $json.candidates?.[0];\nif (!c?.place_id) {\n  return { json: { ...$json, _skip: true, _reason: 'No place_id found' } };\n}\n\nreturn {\n  json: {\n    ...$json,\n    place_id: c.place_id,\n    place_name_guess: c.name || '',\n    place_address_guess: c.formatted_address || '',\n  }\n};"
+      },
+      "id": "extract-place-id",
+      "name": "Extract place_id",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json._skip }}",
+              "value2": false
+            }
+          ]
+        }
+      },
+      "id": "if-has-place-id",
+      "name": "IF has place_id",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://maps.googleapis.com/maps/api/place/details/json",
+        "authentication": "none",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "place_id",
+              "value": "={{ $json.place_id }}"
+            },
+            {
+              "name": "fields",
+              "value": "place_id,name,formatted_address,geometry,website,url,formatted_phone_number,opening_hours,photos,types,business_status"
+            },
+            {
+              "name": "key",
+              "value": "={{ $env.GOOGLE_MAPS_API_KEY }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "google-place-details",
+      "name": "Google - Place Details",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normalize Google Places data for Sanity with type inference\nconst r = $json.result;\nif (!r?.place_id) {\n  return { json: { ...$json, _skip: true, _reason: 'No result in details' } };\n}\n\nconst slugify = (s='') =>\n  s.toLowerCase()\n   .replace(/&/g, ' and ')\n   .replace(/[^a-z0-9]+/g, '-')\n   .replace(/(^-|-$)+/g, '')\n   .slice(0, 96);\n\nconst name = r.name || $json.locationName || '';\nconst slug = { _type: 'slug', current: slugify(name) };\n\nconst lat = r.geometry?.location?.lat;\nconst lng = r.geometry?.location?.lng;\n\nconst googleTypes = Array.isArray(r.types) ? r.types : [];\nconst nameLower = name.toLowerCase();\n\n/**\n * Venue type inference → matches your Sanity enum:\n * comedy_club, food_truck, restaurant, bar, venue, other\n */\nconst inferType = () => {\n  // strongest direct signals\n  if (googleTypes.includes('bar') || googleTypes.includes('night_club')) return 'bar';\n  if (googleTypes.includes('restaurant') || googleTypes.includes('meal_takeaway') || googleTypes.includes('meal_delivery')) return 'restaurant';\n\n  // keyword heuristics (helps for comedy clubs + food trucks)\n  if (/\\bcomedy\\b/.test(nameLower) || /\\bcomedy club\\b/.test(nameLower)) return 'comedy_club';\n  if (/\\bfood truck\\b/.test(nameLower) || /\\btrailer\\b/.test(nameLower)) return 'food_truck';\n\n  // venue-ish signals\n  const venueSignals = new Set([\n    'stadium', 'theater', 'movie_theater', 'museum',\n    'tourist_attraction', 'point_of_interest', 'premise',\n    'establishment', 'amusement_park', 'shopping_mall'\n  ]);\n  if (googleTypes.some(t => venueSignals.has(t))) return 'venue';\n\n  return 'other';\n};\n\nconst placeType = inferType();\n\nconst photoRef = r.photos?.[0]?.photo_reference || '';\nconst photoUrl = photoRef\n  ? `https://maps.googleapis.com/maps/api/place/photo?maxwidth=1600&photo_reference=${encodeURIComponent(photoRef)}&key=${encodeURIComponent($env.GOOGLE_MAPS_API_KEY)}`\n  : '';\n\nreturn {\n  json: {\n    ...$json,\n    placeDoc: {\n      _type: 'place',\n      name,\n      slug,\n      type: placeType,\n      googlePlaceId: r.place_id,\n      website: r.website || '',\n      googleMapsUrl: r.url || '',\n      address: r.formatted_address || '',\n      geo: (typeof lat === 'number' && typeof lng === 'number') ? { lat, lng } : undefined,\n      _photoUrl: photoUrl,\n      _googleTypes: googleTypes,\n      _businessStatus: r.business_status || '',\n      _phone: r.formatted_phone_number || '',\n      _openingHours: r.opening_hours || null,\n    }\n  }\n};"
+      },
+      "id": "normalize-place",
+      "name": "Normalize for Sanity",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.placeDoc.geo && $json.placeDoc.geo.lat !== undefined && $json.placeDoc.geo.lng !== undefined }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-has-geo",
+      "name": "IF has geo",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1450, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://maps.googleapis.com/maps/api/geocode/json",
+        "authentication": "none",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "latlng",
+              "value": "={{ $json.placeDoc.geo.lat + ',' + $json.placeDoc.geo.lng }}"
+            },
+            {
+              "name": "key",
+              "value": "={{ $env.GOOGLE_MAPS_API_KEY }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "google-reverse-geocode",
+      "name": "Google - Reverse Geocode",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1650, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract neighborhood candidate from reverse geocode results\nconst results = $json.results || [];\nconst pickComponent = (typesWanted) => {\n  for (const res of results) {\n    for (const c of (res.address_components || [])) {\n      const types = c.types || [];\n      if (typesWanted.every(t => types.includes(t))) return c.long_name;\n    }\n  }\n  return '';\n};\n\n// Prefer these in order:\nconst neighborhood =\n  pickComponent(['neighborhood']) ||\n  pickComponent(['sublocality', 'political']) ||\n  pickComponent(['sublocality_level_1', 'political']) ||\n  pickComponent(['locality', 'political']) ||\n  '';\n\nreturn {\n  json: {\n    ...$json,\n    neighborhoodName: neighborhood\n  }\n};"
+      },
+      "id": "extract-neighborhood",
+      "name": "Extract neighborhood candidate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1850, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.placeDoc.website }}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "id": "if-has-website",
+      "name": "IF has website",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1450, 500]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.placeDoc.website }}",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "id": "fetch-website",
+      "name": "Fetch website",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1650, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract Instagram handle from website HTML\nconst html = $json.body || $json.data || $json.toString() || '';\nconst match = html.match(/https?:\\/\\/(?:www\\.)?instagram\\.com\\/([A-Za-z0-9._]+)/i);\nconst handle = match?.[1] ? match[1].replace(/\\/.*/, '') : '';\n\nreturn {\n  json: {\n    ...$json,\n    placeDoc: {\n      ...$json.placeDoc,\n      instagram: handle || $json.placeDoc.instagram,\n    }\n  }\n};"
+      },
+      "id": "extract-instagram",
+      "name": "Extract Instagram handle",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1850, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.neighborhoodName && $json.neighborhoodName.trim().length > 0 }}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "id": "if-neighborhood-exists",
+      "name": "IF neighborhoodName exists",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [2050, 300]
+    },
+    {
+      "parameters": {
+        "url": "=https://{{ $env.SANITY_PROJECT_ID }}.api.sanity.io/v{{ $env.SANITY_API_VERSION }}/data/query/{{ $env.SANITY_DATASET }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ query: \"*[_type=='neighborhood' && lower(name)==lower($n)][0]{_id,name}\", params: { n: $json.neighborhoodName } }) }}",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SANITY_API_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "sanity-find-neighborhood",
+      "name": "Sanity - Find neighborhood",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2250, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "sanity-api-credential",
+          "name": "Sanity API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Attach neighborhood reference to placeDoc\nconst neighborhoodId = $json.result?._id || '';\nif (!neighborhoodId) return { json: { ...$json, neighborhoodId: '' } };\n\nreturn {\n  json: {\n    ...$json,\n    neighborhoodId,\n    placeDoc: {\n      ...$json.placeDoc,\n      neighborhood: { _type: 'reference', _ref: neighborhoodId }\n    }\n  }\n};"
+      },
+      "id": "attach-neighborhood",
+      "name": "Attach neighborhood reference",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2450, 200]
+    },
+    {
+      "parameters": {
+        "url": "=https://{{ $env.SANITY_PROJECT_ID }}.api.sanity.io/v{{ $env.SANITY_API_VERSION }}/data/query/{{ $env.SANITY_DATASET }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ query: \"*[_type=='place' && googlePlaceId==$pid][0]{_id}\", params: { pid: $json.placeDoc.googlePlaceId } }) }}",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SANITY_API_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "sanity-find-existing",
+      "name": "Sanity - Find existing place",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2650, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "sanity-api-credential",
+          "name": "Sanity API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract Sanity _id from query result\nconst id = $json.result?._id || '';\nreturn { json: { ...$json, sanityId: id } };"
+      },
+      "id": "extract-sanity-id",
+      "name": "Extract sanity _id",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2850, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.sanityId }}",
+              "operation": "isEmpty"
+            }
+          ]
+        }
+      },
+      "id": "if-not-exists",
+      "name": "IF place does NOT exist",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [3050, 300]
+    },
+    {
+      "parameters": {
+        "url": "=https://{{ $env.SANITY_PROJECT_ID }}.api.sanity.io/v{{ $env.SANITY_API_VERSION }}/data/mutate/{{ $env.SANITY_DATASET }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ mutations: [{ create: $json.placeDoc }] }) }}",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SANITY_API_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "sanity-create",
+      "name": "Sanity - Create place",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [3250, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "sanity-api-credential",
+          "name": "Sanity API"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Google - Find Place",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google - Find Place": {
+      "main": [
+        [
+          {
+            "node": "Extract place_id",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract place_id": {
+      "main": [
+        [
+          {
+            "node": "IF has place_id",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF has place_id": {
+      "main": [
+        [
+          {
+            "node": "Google - Place Details",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Google - Place Details": {
+      "main": [
+        [
+          {
+            "node": "Normalize for Sanity",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize for Sanity": {
+      "main": [
+        [
+          {
+            "node": "IF has geo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF has geo": {
+      "main": [
+        [
+          {
+            "node": "Google - Reverse Geocode",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "IF has website",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google - Reverse Geocode": {
+      "main": [
+        [
+          {
+            "node": "Extract neighborhood candidate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract neighborhood candidate": {
+      "main": [
+        [
+          {
+            "node": "IF has website",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF has website": {
+      "main": [
+        [
+          {
+            "node": "Fetch website",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "IF neighborhoodName exists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch website": {
+      "main": [
+        [
+          {
+            "node": "Extract Instagram handle",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Instagram handle": {
+      "main": [
+        [
+          {
+            "node": "IF neighborhoodName exists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF neighborhoodName exists": {
+      "main": [
+        [
+          {
+            "node": "Sanity - Find neighborhood",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Sanity - Find existing place",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sanity - Find neighborhood": {
+      "main": [
+        [
+          {
+            "node": "Attach neighborhood reference",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Attach neighborhood reference": {
+      "main": [
+        [
+          {
+            "node": "Sanity - Find existing place",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sanity - Find existing place": {
+      "main": [
+        [
+          {
+            "node": "Extract sanity _id",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract sanity _id": {
+      "main": [
+        [
+          {
+            "node": "IF place does NOT exist",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF place does NOT exist": {
+      "main": [
+        [
+          {
+            "node": "Sanity - Create place",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2025-01-27T00:00:00.000Z",
+  "versionId": "1"
+}

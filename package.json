@@ -6,6 +6,7 @@
   "license": "UNLICENSED",
   "scripts": {
     "dev": "sanity dev",
+    "seed": "SANITY_WRITE_TOKEN=skZNPKDdxuQ725uzthbhTMA6F1kGUgIl4uucDlT7yFmMz2iW2ZXtHS9y9LkcHCJJtP9FbeiyvWiYX1gy0Q3Lk9bEtTUFrPkKeXHj4gHmDPY3KAFsh0Vv43OzXEmdBF4gfLUtxx9QbWldujAyiX0VfYRmKvEYIqs7WjGhof4G3LXNojUuQnlX node ./scripts/seed.mjs",
     "start": "sanity start",
     "build": "sanity build",
     "deploy": "sanity deploy",
@@ -15,6 +16,7 @@
     "sanity"
   ],
   "dependencies": {
+    "@sanity/client": "^7.13.2",
     "@sanity/vision": "^4.21.1",
     "react": "^19.1",
     "react-dom": "^19.1",
@@ -26,7 +28,8 @@
     "@types/react": "^19.1",
     "eslint": "^9.28",
     "prettier": "^3.5",
-    "typescript": "^5.8"
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
   },
   "prettier": {
     "semi": false,

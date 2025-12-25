@@ -1,0 +1,155 @@
+{
+  "name": "Do512 Event List Scraper",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * *"
+            }
+          ]
+        }
+      },
+      "id": "daily-cron",
+      "name": "Daily Cron (9 AM)",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://do512.com",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            },
+            {
+              "name": "Accept",
+              "value": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8"
+            },
+            {
+              "name": "Accept-Language",
+              "value": "en-US,en;q=0.9"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "id": "fetch-homepage",
+      "name": "Fetch Do512 Homepage",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract all <a> tags and their href values from the homepage\nconst html = $input.item.json.toString();\nconst baseUrl = 'https://do512.com';\n\n// Find all <a> tags with href attributes\nconst anchorTags = [];\nconst anchorRegex = /<a[^>]*href=[\"']([^\"']+)[\"'][^>]*>([^<]*)<\\/a>/gi;\n\nlet match;\nwhile ((match = anchorRegex.exec(html)) !== null) {\n  const href = match[1];\n  const text = match[2].trim();\n  \n  // Convert relative URLs to absolute URLs\n  let fullUrl = href;\n  if (href.startsWith('/')) {\n    fullUrl = baseUrl + href;\n  } else if (!href.startsWith('http://') && !href.startsWith('https://')) {\n    // Handle relative URLs without leading slash\n    fullUrl = baseUrl + '/' + href;\n  }\n  \n  anchorTags.push({\n    href: href,\n    fullUrl: fullUrl,\n    text: text || '',\n    isEventLink: href.startsWith('/events/') || href.startsWith('/events?')\n  });\n}\n\n// Remove duplicates based on href\nconst seen = new Set();\nconst uniqueAnchors = anchorTags.filter(anchor => {\n  if (seen.has(anchor.href)) {\n    return false;\n  }\n  seen.add(anchor.href);\n  return true;\n});\n\n// Return as array of items - n8n will automatically iterate over these\nreturn uniqueAnchors.map(tag => ({ json: tag }));"
+      },
+      "id": "extract-event-links",
+      "name": "Extract All Anchor Tags",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.isEventLink }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "filter-event-links",
+      "name": "Filter Event Links",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract just the URL for easier processing downstream\nconst url = $input.item.json.fullUrl;\n\nreturn {\n  json: {\n    url: url,\n    href: $input.item.json.href,\n    text: $input.item.json.text\n  }\n};"
+      },
+      "id": "extract-url",
+      "name": "Extract URL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1050, 300]
+    }
+  ],
+  "connections": {
+    "Daily Cron (9 AM)": {
+      "main": [
+        [
+          {
+            "node": "Fetch Do512 Homepage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Do512 Homepage": {
+      "main": [
+        [
+          {
+            "node": "Extract All Anchor Tags",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract All Anchor Tags": {
+      "main": [
+        [
+          {
+            "node": "Filter Event Links",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Event Links": {
+      "main": [
+        [
+          {
+            "node": "Extract URL",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Extract URL": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2025-01-27T00:00:00.000Z",
+  "versionId": "1"
+}

@@ -1,0 +1,291 @@
+{
+  "name": "Auto Guide Publisher",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "auto-guide-publisher",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "auto-guide-publisher-webhook"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.body.topic }}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "id": "validate-input",
+      "name": "Validate Input",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Resolve place slugs to Sanity document IDs\n// This would typically call the sanityClient.resolvePlaceSlugs() function\n// For n8n, we'll use an HTTP request to query Sanity\n\nconst placeSlugs = $input.item.json.body.placeSlugs || [];\nconst projectId = process.env.SANITY_PROJECT_ID || 'ow7iqhbw';\nconst dataset = process.env.SANITY_DATASET || 'production';\n\nif (placeSlugs.length === 0) {\n  return { json: { placeReferences: [] } };\n}\n\n// Build GROQ query\nconst slugsQuery = placeSlugs.map(slug => `\"${slug}\"`).join(', ');\nconst query = `*[_type == \"place\" && slug.current in [${slugsQuery}]]{_id, slug}`;\nconst encodedQuery = encodeURIComponent(query);\nconst queryUrl = `https://${projectId}.api.sanity.io/v2023-08-01/data/query/${dataset}?query=${encodedQuery}`;\n\n// Return query URL and slugs for HTTP node to execute\nreturn {\n  json: {\n    queryUrl,\n    placeSlugs,\n    topic: $input.item.json.body.topic\n  }\n};"
+      },
+      "id": "prepare-place-query",
+      "name": "Prepare Place Query",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.queryUrl }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SANITY_WRITE_TOKEN }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "query-places",
+      "name": "Query Places from Sanity",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [850, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "sanity-api-credential",
+          "name": "Sanity API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Transform Sanity query result into place references\nconst queryResult = $input.item.json.result || [];\nconst placeReferences = queryResult.map(place => ({\n  _type: 'reference',\n  _ref: place._id\n}));\n\nreturn {\n  json: {\n    placeReferences,\n    topic: $input.first().json.topic,\n    placeSlugs: $input.first().json.placeSlugs\n  }\n};"
+      },
+      "id": "transform-place-refs",
+      "name": "Transform to References",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"gpt-4-turbo-preview\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are a helpful assistant that creates engaging, informative guides about Austin, Texas. You write in a friendly, conversational tone that captures the unique character of Austin.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Generate a comprehensive guide about: \\\"{{ $json.topic }}\\\"\\n\\nThe guide should be engaging, informative, and specific to Austin, Texas.\\n\\nReturn a JSON object with the following structure:\\n{\\n  \\\"title\\\": \\\"A compelling, SEO-friendly title (max 80 characters)\\\",\\n  \\\"slug\\\": \\\"url-friendly-slug-based-on-title\\\",\\n  \\\"summary\\\": \\\"A 2-3 sentence summary that hooks the reader (max 200 characters)\\\",\\n  \\\"content\\\": \\\"Full guide content in HTML format with proper headings, paragraphs, and lists. Use <h2> for main sections, <h3> for subsections, <p> for paragraphs, <ul>/<ol> for lists, and <strong>/<em> for emphasis.\\\",\\n  \\\"guideType\\\": \\\"One of: list, explainer, review, roundup, feature\\\"\\n}\\n\\nMake the content detailed, specific, and useful. Include practical information like locations, hours (if known), tips, and local context. Write in a friendly, conversational Austin voice.\"\n    }\n  ],\n  \"response_format\": { \"type\": \"json_object\" },\n  \"temperature\": 0.7\n}",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "="
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "call-llm",
+      "name": "Call LLM API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1250, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "llm-api-credential",
+          "name": "LLM API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse LLM response and build Sanity mutation payload\nconst llmResponse = JSON.parse($input.item.json.choices[0].message.content);\nconst placeRefs = $input.first().json.placeReferences || [];\n\n// Convert HTML content to simple portable text structure\n// TODO: Implement proper HTML-to-portable-text conversion\nconst htmlContent = llmResponse.content || '';\nconst textContent = htmlContent.replace(/<[^>]+>/g, '').trim();\nconst paragraphs = textContent.split(/\\n\\s*\\n/).filter(p => p.trim().length > 0);\n\nconst portableTextBlocks = paragraphs.map((text, index) => ({\n  _type: 'block',\n  _key: `block-${index}`,\n  style: 'normal',\n  children: [{\n    _type: 'span',\n    _key: `span-${index}`,\n    text: text.trim(),\n    marks: []\n  }],\n  markDefs: []\n}));\n\n// Build mutation payload\nconst mutation = {\n  mutations: [{\n    create: {\n      _type: 'guide',\n      title: llmResponse.title,\n      slug: {\n        _type: 'slug',\n        current: llmResponse.slug || llmResponse.title.toLowerCase().replace(/[^\\w\\s-]/g, '').replace(/[\\s_-]+/g, '-').replace(/^-+|-+$/g, '')\n      },\n      summary: llmResponse.summary,\n      content: portableTextBlocks,\n      guideType: llmResponse.guideType || 'list',\n      ...(placeRefs.length > 0 && { places: placeRefs })\n    }\n  }]\n};\n\nreturn { json: mutation };"
+      },
+      "id": "build-mutation",
+      "name": "Build Sanity Mutation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1450, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://ow7iqhbw.api.sanity.io/v2023-08-01/data/mutate/production",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "publish-to-sanity",
+      "name": "Publish to Sanity",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1650, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "sanity-api-credential",
+          "name": "Sanity API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"success\": true, \"guide\": { \"title\": $('Build Sanity Mutation').item.json.mutations[0].create.title, \"slug\": $('Build Sanity Mutation').item.json.mutations[0].create.slug.current, \"_id\": $json.results[0].id || $json.transactionId } } }}",
+        "options": {}
+      },
+      "id": "respond-success",
+      "name": "Respond Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1850, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"success\": false, \"error\": \"Topic is required\" } }}",
+        "options": {}
+      },
+      "id": "respond-error",
+      "name": "Respond Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [650, 500]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Input": {
+      "main": [
+        [
+          {
+            "node": "Prepare Place Query",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Place Query": {
+      "main": [
+        [
+          {
+            "node": "Query Places from Sanity",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Places from Sanity": {
+      "main": [
+        [
+          {
+            "node": "Transform to References",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transform to References": {
+      "main": [
+        [
+          {
+            "node": "Call LLM API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call LLM API": {
+      "main": [
+        [
+          {
+            "node": "Build Sanity Mutation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Sanity Mutation": {
+      "main": [
+        [
+          {
+            "node": "Publish to Sanity",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Publish to Sanity": {
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2025-01-27T00:00:00.000Z",
+  "versionId": "1"
+}
+

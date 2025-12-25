@@ -1,0 +1,409 @@
+{
+  "name": "Topic Miner Skeleton",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * *"
+            }
+          ]
+        }
+      },
+      "id": "cron-trigger",
+      "name": "Daily Cron (9 AM)",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Split workflow into parallel branches for each source\n// Each branch will collect topics from a different source\nreturn [\n  { json: { source: 'tiktok' } },\n  { json: { source: 'google' } },\n  { json: { source: 'llm' } }\n];"
+      },
+      "id": "split-sources",
+      "name": "Split by Source",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.source }}",
+              "value2": "tiktok",
+              "operation": "equal"
+            }
+          ]
+        }
+      },
+      "id": "filter-tiktok",
+      "name": "Filter TikTok",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [650, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.source }}",
+              "value2": "google",
+              "operation": "equal"
+            }
+          ]
+        }
+      },
+      "id": "filter-google",
+      "name": "Filter Google",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.source }}",
+              "value2": "llm",
+              "operation": "equal"
+            }
+          ]
+        }
+      },
+      "id": "filter-llm",
+      "name": "Filter LLM",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [650, 400]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.tiktok.com/v1/search",
+        "authentication": "none",
+        "sendHeaders": true,
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "austin texas food nightlife"
+            },
+            {
+              "name": "type",
+              "value": "video"
+            }
+          ]
+        },
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.TIKTOK_API_KEY }}"
+            }
+          ]
+        },
+        "options": {},
+        "notes": "TODO: Replace with actual TikTok API endpoint and authentication.\n\nRequired:\n- TikTok API key/access token\n- Search query parameters (keywords, location, date range)\n- Response parsing for video titles, descriptions, comments\n\nExpected response shape:\n{\n  \"data\": [\n    {\n      \"title\": \"...\",\n      \"description\": \"...\",\n      \"comments\": [...]\n    }\n  ]\n}\n\nFor now, this is a placeholder that will return mock data."
+      },
+      "id": "tiktok-search",
+      "name": "TikTok Search (TODO)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [850, 200]
+    },
+    {
+      "parameters": {
+        "url": "=https://www.googleapis.com/customsearch/v1",
+        "authentication": "none",
+        "sendHeaders": true,
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "key",
+              "value": "={{ $env.GOOGLE_API_KEY }}"
+            },
+            {
+              "name": "cx",
+              "value": "={{ $env.GOOGLE_SEARCH_ENGINE_ID }}"
+            },
+            {
+              "name": "q",
+              "value": "austin texas questions"
+            }
+          ]
+        },
+        "options": {},
+        "notes": "TODO: Configure Google Custom Search API.\n\nRequired:\n- Google API key\n- Custom Search Engine ID (cx)\n- Search query parameters\n- Parse 'People Also Ask' results if available\n\nExpected response shape:\n{\n  \"items\": [\n    {\n      \"title\": \"...\",\n      \"snippet\": \"...\"\n    }\n  ]\n}\n\nFor now, this is a placeholder that will return mock data."
+      },
+      "id": "google-search",
+      "name": "Google Search (TODO)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.LLM_BASE_URL || 'https://api.openai.com/v1' }}/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"{{ $env.LLM_MODEL || 'gpt-4-turbo-preview' }}\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are a helpful assistant that generates engaging questions and topics about Austin, Texas that people would search for or ask about.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Generate 10 engaging questions/topics about Austin, Texas that people would search for. Focus on food, nightlife, comedy, wellness, and weird/unique Austin experiences. Return a JSON object with a 'topics' array, where each topic has: question, category, optional neighborhoodSlug, optional placeSlugs.\"\n    }\n  ],\n  \"response_format\": { \"type\": \"json_object\" },\n  \"temperature\": 0.8\n}",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.LLM_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "llm-topic-generator",
+      "name": "LLM Topic Generator",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [850, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "llm-api-credential",
+          "name": "LLM API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normalize TikTok response into topic objects\n// TODO: Implement actual parsing based on TikTok API response structure\n\n// Mock normalization for now\nconst mockTopics = [\n  {\n    question: \"Where are the best tacos in East Austin?\",\n    source: \"tiktok\",\n    category: \"food\",\n    neighborhoodSlug: \"east-austin\",\n    placeSlugs: []\n  }\n];\n\nreturn mockTopics.map(topic => ({ json: topic }));"
+      },
+      "id": "normalize-tiktok",
+      "name": "Normalize TikTok Topics",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1050, 200],
+      "notes": "TODO: Parse actual TikTok API response.\n\nExtract:\n- Video titles/questions\n- Comments/questions\n- Hashtags (for category detection)\n- Location tags (for neighborhood/place mapping)\n\nMap to topic structure:\n{\n  question: string,\n  source: 'tiktok',\n  category: 'food' | 'comedy' | 'nightlife' | 'wellness' | 'weird' | 'other',\n  neighborhoodSlug?: string,\n  placeSlugs?: string[]\n}"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normalize Google search results into topic objects\n// TODO: Implement actual parsing based on Google API response structure\n\n// Mock normalization for now\nconst mockTopics = [\n  {\n    question: \"What are the best date night spots in Zilker?\",\n    source: \"google\",\n    category: \"nightlife\",\n    neighborhoodSlug: \"zilker\",\n    placeSlugs: []\n  }\n];\n\nreturn mockTopics.map(topic => ({ json: topic }));"
+      },
+      "id": "normalize-google",
+      "name": "Normalize Google Topics",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1050, 300],
+      "notes": "TODO: Parse actual Google Custom Search API response.\n\nExtract:\n- Search result titles\n- 'People Also Ask' questions\n- Snippets that contain questions\n\nMap to topic structure:\n{\n  question: string,\n  source: 'google',\n  category: 'food' | 'comedy' | 'nightlife' | 'wellness' | 'weird' | 'other',\n  neighborhoodSlug?: string,\n  placeSlugs?: string[]\n}"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse LLM response and normalize topics\nconst llmResponse = JSON.parse($input.item.json.choices[0].message.content);\nconst topics = llmResponse.topics || [];\n\n// Add source field to each topic\nconst normalizedTopics = topics.map(topic => ({\n  ...topic,\n  source: 'llm'\n}));\n\nreturn normalizedTopics.map(topic => ({ json: topic }));"
+      },
+      "id": "normalize-llm",
+      "name": "Normalize LLM Topics",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1050, 400]
+    },
+    {
+      "parameters": {
+        "url": "=https://{{ $env.SANITY_PROJECT_ID || 'ow7iqhbw' }}.api.sanity.io/v2023-08-01/data/mutate/{{ $env.SANITY_DATASET || 'production' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"mutations\": [\n    {\n      \"create\": {\n        \"_type\": \"topic\",\n        \"question\": \"{{ $json.question }}\",\n        \"source\": \"{{ $json.source }}\",\n        \"category\": \"{{ $json.category }}\",\n        \"neighborhoodSlug\": \"{{ $json.neighborhoodSlug || '' }}\",\n        \"placeSlugs\": {{ JSON.stringify($json.placeSlugs || []) }},\n        \"handled\": false,\n        \"createdAt\": \"{{ $now.toISO() }}\"\n      }\n    }\n  ]\n}",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SANITY_WRITE_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {},
+        "notes": "TODO: This assumes a 'topic' document type exists in Sanity.\n\nAlternative: Write topics to a JSON file in the automation folder instead.\n\nFor file-based storage, use a Function node to append to topics.json"
+      },
+      "id": "store-topics-sanity",
+      "name": "Store Topics in Sanity",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1250, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "sanity-api-credential",
+          "name": "Sanity API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Alternative: Store topics in a JSON file\n// This is a simpler approach for Phase 2 before creating the topic schema\n\nconst topic = $input.item.json;\n\n// In n8n, you would typically use a Write Binary File node or\n// make an HTTP request to a local file server\n// For now, this is a placeholder that logs the topic\n\nconsole.log('Topic to store:', JSON.stringify(topic, null, 2));\n\nreturn { json: { stored: true, topic } };"
+      },
+      "id": "store-topics-file",
+      "name": "Store Topics to File (Alternative)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 400],
+      "notes": "Alternative to Sanity storage: Write topics to automation/topics.json\n\nThis requires:\n- A local file server endpoint, OR\n- n8n's Write Binary File node (if available), OR\n- A separate webhook that writes to the file system\n\nFor now, this is a placeholder. Choose either Sanity storage or file storage based on your preference."
+    }
+  ],
+  "connections": {
+    "Daily Cron (9 AM)": {
+      "main": [
+        [
+          {
+            "node": "Split by Source",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split by Source": {
+      "main": [
+        [
+          {
+            "node": "Filter TikTok",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Filter Google",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Filter LLM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter TikTok": {
+      "main": [
+        [
+          {
+            "node": "TikTok Search (TODO)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Google": {
+      "main": [
+        [
+          {
+            "node": "Google Search (TODO)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter LLM": {
+      "main": [
+        [
+          {
+            "node": "LLM Topic Generator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "TikTok Search (TODO)": {
+      "main": [
+        [
+          {
+            "node": "Normalize TikTok Topics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Search (TODO)": {
+      "main": [
+        [
+          {
+            "node": "Normalize Google Topics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM Topic Generator": {
+      "main": [
+        [
+          {
+            "node": "Normalize LLM Topics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize TikTok Topics": {
+      "main": [
+        [
+          {
+            "node": "Store Topics in Sanity",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Google Topics": {
+      "main": [
+        [
+          {
+            "node": "Store Topics in Sanity",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize LLM Topics": {
+      "main": [
+        [
+          {
+            "node": "Store Topics in Sanity",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2025-01-27T00:00:00.000Z",
+  "versionId": "1"
+}
+

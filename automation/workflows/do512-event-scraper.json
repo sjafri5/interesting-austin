@@ -1,0 +1,188 @@
+{
+  "name": "Do512 Event Scraper",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "scrape-event",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "do512-event-scraper-webhook"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.body.url || $json.body.eventUrl }}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "id": "validate-input",
+      "name": "Validate Input",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract event URL from request body\nconst eventUrl = $input.item.json.body?.url || $input.item.json.body?.eventUrl || $input.item.json.url;\n\nif (!eventUrl) {\n  throw new Error('Event URL is required');\n}\n\n// Ensure URL is valid\nif (!eventUrl.startsWith('http://') && !eventUrl.startsWith('https://')) {\n  throw new Error('Invalid URL format');\n}\n\nreturn {\n  json: {\n    eventUrl: eventUrl.trim()\n  }\n};"
+      },
+      "id": "extract-url",
+      "name": "Extract Event URL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.eventUrl }}",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            },
+            {
+              "name": "Accept",
+              "value": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8"
+            },
+            {
+              "name": "Accept-Language",
+              "value": "en-US,en;q=0.9"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "id": "fetch-html",
+      "name": "Fetch HTML",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract event name from title tag\nconst html = $input.item.json.toString();\nconst eventUrl = $('Extract Event URL').item.json.eventUrl;\n\n// Extract date from URL\nlet date = '';\nconst urlDateMatch = eventUrl.match(/\\/(\\d{4})\\/(\\d{1,2})\\/(\\d{1,2})\\//);\nif (urlDateMatch) {\n  const year = urlDateMatch[1];\n  const month = urlDateMatch[2].padStart(2, '0');\n  const day = urlDateMatch[3].padStart(2, '0');\n  date = `${year}-${month}-${day}`;\n}\n\n// Extract event name from title tag\nlet eventName = '';\nconst titleMatch = html.match(/<title>([^<]+)<\\/title>/i);\nif (titleMatch && titleMatch[1]) {\n  eventName = titleMatch[1].trim();\n  // Remove \"in Austin at [venue]\" pattern\n  eventName = eventName.replace(/\\s+in\\s+Austin\\s+at\\s+.*$/i, '').trim();\n  // Remove \"at [venue]\" pattern as fallback\n  eventName = eventName.replace(/\\s+at\\s+.*$/i, '').trim();\n}\n\n// Build result object\nconst result = {\n  banner_image: '',\n  date: date,\n  event_name: eventName,\n  location: '',\n  summary: '',\n  ticket_link: '',\n  time: ''\n};\n\nreturn { json: result };"
+      },
+      "id": "parse-html",
+      "name": "Parse HTML",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "respond-success",
+      "name": "Respond Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1250, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"error\": \"Event URL is required. Please provide 'url' or 'eventUrl' in the request body.\" } }}",
+        "options": {}
+      },
+      "id": "respond-error",
+      "name": "Respond Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [650, 500]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Input": {
+      "main": [
+        [
+          {
+            "node": "Extract Event URL",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Event URL": {
+      "main": [
+        [
+          {
+            "node": "Fetch HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch HTML": {
+      "main": [
+        [
+          {
+            "node": "Parse HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse HTML": {
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2025-01-27T00:00:00.000Z",
+  "versionId": "1"
+}
