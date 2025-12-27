@@ -24,7 +24,8 @@ export default defineType({
     defineField({
       name: 'content',
       title: 'Content',
-      type: 'text',
+      type: 'array', // Change this from 'text'
+  of: [{ type: 'block' }] // Add this line
     }),
     defineField({
       name: 'publishedAt',
