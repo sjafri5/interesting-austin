@@ -32,6 +32,11 @@ export default defineType({
       title: 'Published At',
       type: 'datetime',
     }),
+    defineField({
+      name: 'img',
+      title: 'Image URL',
+      type: 'url',
+    }),
   ],
   preview: {
     select: {

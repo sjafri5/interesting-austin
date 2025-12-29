@@ -38,16 +38,17 @@ function HeroPost({
   slug,
   excerpt,
   coverImage,
+  img,
   date,
   author,
 }: Pick<
   Exclude<HeroQueryResult, null>,
-  "title" | "coverImage" | "date" | "excerpt" | "author" | "slug"
+  "title" | "coverImage" | "img" | "date" | "excerpt" | "author" | "slug"
 >) {
   return (
     <article>
       <Link className="group mb-8 block md:mb-16" href={`/posts/${slug}`}>
-        <CoverImage image={coverImage} priority />
+        <CoverImage image={coverImage} imageUrl={img} priority />
       </Link>
       <div className="mb-20 md:mb-28 md:grid md:grid-cols-2 md:gap-x-16 lg:gap-x-8">
         <div>
@@ -89,6 +90,7 @@ export default async function Page() {
           title={heroPost.title}
           slug={heroPost.slug}
           coverImage={heroPost.coverImage}
+          img={heroPost.img}
           excerpt={heroPost.excerpt}
           date={heroPost.date}
           author={heroPost.author}
