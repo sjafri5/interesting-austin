@@ -5,7 +5,7 @@ import { urlForImage } from "@/sanity/lib/utils";
 
 interface CoverImageProps {
   image: any;
-  imageUrl?: string;
+  imageUrl?: string | null;
   priority?: boolean;
 }
 
