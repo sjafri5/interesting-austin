@@ -22,15 +22,9 @@ export default defineType({
       validation: Rule => Rule.required(),
     }),
     defineField({
-      name: 'summary',
-      title: 'Summary',
-      type: 'text',
-    }),
-    defineField({
       name: 'content',
       title: 'Content',
-      type: 'array',
-      of: [{ type: 'block' }],
+      type: 'text',
     }),
     defineField({
       name: 'guideType',
@@ -48,10 +42,9 @@ export default defineType({
       },
     }),
     defineField({
-      name: 'image',
-      title: 'Main Image',
-      type: 'image',
-      options: { hotspot: true },
+      name: 'img',
+      title: 'Image URL',
+      type: 'url',
     }),
     defineField({
       name: 'places',
