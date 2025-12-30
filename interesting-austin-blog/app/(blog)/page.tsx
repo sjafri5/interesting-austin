@@ -1,76 +1,154 @@
 import Link from "next/link";
 import { Suspense } from "react";
 
-import Avatar from "./avatar";
-import CoverImage from "./cover-image";
-import DateComponent from "./date";
-import MoreStories from "./more-stories";
-import Onboarding from "./onboarding";
+import Navigation from "./navigation";
+import EventCard from "./event-card";
+import GuideCard from "./guide-card";
 import PortableText from "./portable-text";
 
 import type { HeroQueryResult } from "@/sanity.types";
 import * as demo from "@/sanity/lib/demo";
 import { sanityFetch } from "@/sanity/lib/fetch";
-import { heroQuery, settingsQuery } from "@/sanity/lib/queries";
+import { heroQuery, settingsQuery, moreStoriesQuery, guidesQuery } from "@/sanity/lib/queries";
 
-function Intro(props: { title: string | null | undefined; description: any }) {
-  const title = props.title || demo.title;
-  const description = props.description?.length
-    ? props.description
-    : demo.description;
+function HeroSection({
+  title,
+  description,
+  featuredPost,
+}: {
+  title: string | null | undefined;
+  description: any;
+  featuredPost: HeroQueryResult | null;
+}) {
+  const displayTitle = title || demo.title;
+  
   return (
-    <section className="mt-16 mb-16 flex flex-col lg:mb-12">
-      <h1 className="text-balance text-6xl font-bold leading-tight tracking-tighter lg:text-8xl">
-        {title || demo.title}
-      </h1>
-      <h2 className="text-pretty mt-5 text-lg">
-        <PortableText
-          className="prose-lg"
-          value={description?.length ? description : demo.description}
-        />
-      </h2>
+    <section className="relative bg-gradient-to-br from-austin-cream via-white to-austin-cream/50 py-20 md:py-32 border-b border-austin-cream/50">
+      <div className="container mx-auto px-5">
+        <div className="max-w-4xl">
+          <h1 className="text-balance text-5xl md:text-7xl lg:text-8xl font-serif font-bold leading-tight tracking-tight text-austin-navy mb-6">
+            {displayTitle}
+          </h1>
+          <div className="text-lg md:text-xl text-austin-navy/80 leading-relaxed mb-8">
+            <PortableText
+              className="prose-lg prose-headings:font-serif"
+              value={description?.length ? description : demo.description}
+            />
+          </div>
+
+          {/* Featured Event Badge */}
+          {featuredPost && (
+            <Link
+              href={`/posts/${featuredPost.slug}`}
+              className="inline-flex items-center gap-3 bg-white rounded-full px-6 py-4 shadow-lg hover:shadow-xl transition-all duration-300 border border-austin-cream/50 hover:-translate-y-1 group"
+            >
+              <div className="flex-shrink-0 w-12 h-12 bg-austin-terracotta rounded-full flex items-center justify-center">
+                <svg
+                  className="w-6 h-6 text-white"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+              </div>
+              <div>
+                <div className="text-xs font-semibold text-austin-navy/60 uppercase tracking-wide">
+                  Today's Top Event
+                </div>
+                <div className="text-base font-bold text-austin-navy group-hover:text-austin-terracotta transition-colors">
+                  {featuredPost.title}
+                </div>
+              </div>
+              <svg
+                className="w-5 h-5 text-austin-terracotta transition-transform group-hover:translate-x-1"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 5l7 7-7 7"
+                />
+              </svg>
+            </Link>
+          )}
+        </div>
+      </div>
     </section>
   );
 }
 
-function HeroPost({
-  title,
-  slug,
-  excerpt,
-  coverImage,
-  img,
-  date,
-  author,
-}: Pick<
-  Exclude<HeroQueryResult, null>,
-  "title" | "coverImage" | "img" | "date" | "excerpt" | "author" | "slug"
->) {
-  return (
-    <article>
-      <Link className="group mb-8 block md:mb-16" href={`/posts/${slug}`}>
-        <CoverImage image={coverImage} imageUrl={img} priority />
-      </Link>
-      <div className="mb-20 md:mb-28 md:grid md:grid-cols-2 md:gap-x-16 lg:gap-x-8">
-        <div>
-          <h3 className="text-pretty mb-4 text-4xl leading-tight lg:text-6xl">
-            <Link href={`/posts/${slug}`} className="hover:underline">
-              {title}
-            </Link>
-          </h3>
-          <div className="mb-4 text-lg md:mb-0">
-            <DateComponent dateString={date} />
-          </div>
-        </div>
-        <div>
-          {excerpt && (
-            <p className="text-pretty mb-4 text-lg leading-relaxed">
-              {excerpt}
-            </p>
-          )}
-          {author && <Avatar name={author.name} picture={author.picture} />}
-        </div>
+async function EventsStream() {
+  const events = await sanityFetch({
+    query: moreStoriesQuery,
+    params: { skip: "", limit: 6 },
+  });
+
+  if (!events || events.length === 0) {
+    return (
+      <div className="text-center py-16 text-austin-navy/60">
+        <p className="text-lg">No events available at the moment.</p>
       </div>
-    </article>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
+      {events.map((event) => (
+        <EventCard
+          key={event._id}
+          _id={event._id}
+          title={event.title}
+          slug={event.slug}
+          excerpt={event.excerpt}
+          coverImage={event.coverImage}
+          img={event.img}
+          date={event.date}
+        />
+      ))}
+    </div>
+  );
+}
+
+async function GuidesStream() {
+  const guides = await sanityFetch({
+    query: guidesQuery,
+    params: { limit: 6 },
+  });
+
+  if (!guides || guides.length === 0) {
+    return (
+      <div className="text-center py-16 text-austin-navy/60">
+        <p className="text-lg">No guides available at the moment.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
+      {guides.map((guide) => (
+        <GuideCard
+          key={guide._id}
+          _id={guide._id}
+          title={guide.title}
+          slug={guide.slug}
+          content={guide.content}
+          guideType={guide.guideType}
+          img={guide.img}
+          updatedAt={guide.updatedAt}
+          places={guide.places}
+          neighborhoods={guide.neighborhoods}
+        />
+      ))}
+    </div>
   );
 }
 
@@ -83,31 +161,115 @@ export default async function Page() {
   ]);
 
   return (
-    <div className="container mx-auto px-5">
-      <Intro title={settings?.title} description={settings?.description} />
-      {heroPost ? (
-        <HeroPost
-          title={heroPost.title}
-          slug={heroPost.slug}
-          coverImage={heroPost.coverImage}
-          img={heroPost.img}
-          excerpt={heroPost.excerpt}
-          date={heroPost.date}
-          author={heroPost.author}
+    <>
+      <Navigation />
+      <div className="min-h-screen bg-austin-cream">
+        {/* Hero Section */}
+        <HeroSection
+          title={settings?.title}
+          description={settings?.description}
+          featuredPost={heroPost}
         />
-      ) : (
-        <Onboarding />
-      )}
-      {heroPost?._id && (
-        <aside>
-          <h2 className="mb-8 text-6xl font-bold leading-tight tracking-tighter md:text-7xl">
-            More Stories
-          </h2>
-          <Suspense>
-            <MoreStories skip={heroPost._id} limit={100} />
-          </Suspense>
-        </aside>
-      )}
-    </div>
+
+        {/* Main Content */}
+        <main className="container mx-auto px-5 py-16">
+          {/* Today's Events Section */}
+          <section className="mb-20">
+            <div className="flex items-center justify-between mb-8">
+              <div>
+                <h2 className="text-4xl md:text-5xl font-serif font-bold text-austin-navy mb-2">
+                  Today's Events
+                </h2>
+                <p className="text-austin-navy/60 text-lg">
+                  Discover what's happening in Austin today
+                </p>
+              </div>
+            </div>
+            <Suspense
+              fallback={
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
+                  {[1, 2, 3, 4].map((i) => (
+                    <div
+                      key={i}
+                      className="bg-white rounded-lg h-64 animate-pulse"
+                    />
+                  ))}
+                </div>
+              }
+            >
+              <EventsStream />
+            </Suspense>
+          </section>
+
+          {/* Essential Guides Section */}
+          <section className="mb-20">
+            <div className="flex items-center justify-between mb-8">
+              <div>
+                <h2 className="text-4xl md:text-5xl font-serif font-bold text-austin-navy mb-2">
+                  Essential Guides
+                </h2>
+                <p className="text-austin-navy/60 text-lg">
+                  Curated recommendations for exploring Austin
+                </p>
+              </div>
+              <Link
+                href="/guides"
+                className="hidden md:flex items-center gap-2 text-austin-terracotta font-medium hover:gap-3 transition-all"
+              >
+                View All Guides
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 5l7 7-7 7"
+                  />
+                </svg>
+              </Link>
+            </div>
+            <Suspense
+              fallback={
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
+                  {[1, 2, 3].map((i) => (
+                    <div
+                      key={i}
+                      className="bg-white rounded-lg h-80 animate-pulse"
+                    />
+                  ))}
+                </div>
+              }
+            >
+              <GuidesStream />
+            </Suspense>
+            <div className="mt-8 text-center md:hidden">
+              <Link
+                href="/guides"
+                className="inline-flex items-center gap-2 text-austin-terracotta font-medium"
+              >
+                View All Guides
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 5l7 7-7 7"
+                  />
+                </svg>
+              </Link>
+            </div>
+          </section>
+        </main>
+      </div>
+    </>
   );
 }

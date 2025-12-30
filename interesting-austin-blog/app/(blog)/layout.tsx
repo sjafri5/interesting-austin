@@ -6,7 +6,7 @@ import {
   VisualEditing,
   toPlainText,
 } from "next-sanity";
-import { Inter } from "next/font/google";
+import { Inter, Playfair_Display } from "next/font/google";
 import { draftMode } from "next/headers";
 
 import AlertBanner from "./alert-banner";
@@ -53,6 +53,13 @@ const inter = Inter({
   display: "swap",
 });
 
+const playfair = Playfair_Display({
+  variable: "--font-playfair",
+  subsets: ["latin"],
+  display: "swap",
+  weight: ["400", "500", "600", "700", "800", "900"],
+});
+
 export default async function RootLayout({
   children,
 }: {
@@ -61,7 +68,7 @@ export default async function RootLayout({
   const { isEnabled: isDraftMode } = await draftMode();
 
   return (
-    <html lang="en" className={`${inter.variable} bg-white text-black`}>
+    <html lang="en" className={`${inter.variable} ${playfair.variable} bg-austin-cream text-austin-navy`}>
       <body>
         <section className="min-h-screen">
           {isDraftMode && <AlertBanner />}

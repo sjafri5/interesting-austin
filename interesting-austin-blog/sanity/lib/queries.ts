@@ -33,3 +33,28 @@ export const postQuery = defineQuery(`
     ${postFields}
   }
 `);
+
+const guideFields = /* groq */ `
+  _id,
+  "status": select(_originalId in path("drafts.**") => "draft", "published"),
+  "title": coalesce(title, "Untitled"),
+  "slug": slug.current,
+  content,
+  guideType,
+  img,
+  "updatedAt": _updatedAt,
+  "places": places[]->{name, slug, type},
+  "neighborhoods": neighborhoods[]->{name, slug},
+`;
+
+export const guidesQuery = defineQuery(`
+  *[_type == "guide" && defined(slug.current)] | order(_updatedAt desc) [0...$limit] {
+    ${guideFields}
+  }
+`);
+
+export const guideQuery = defineQuery(`
+  *[_type == "guide" && slug.current == $slug] [0] {
+    ${guideFields}
+  }
+`);
