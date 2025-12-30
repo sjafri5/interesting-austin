@@ -59,7 +59,7 @@ function HeroSection({
               </div>
               <div>
                 <div className="text-xs font-semibold text-austin-navy/60 uppercase tracking-wide">
-                  Today's Top Event
+                  Today&apos;s Top Event
                 </div>
                 <div className="text-base font-bold text-austin-navy group-hover:text-austin-terracotta transition-colors">
                   {featuredPost.title}
@@ -178,10 +178,10 @@ export default async function Page() {
             <div className="flex items-center justify-between mb-8">
               <div>
                 <h2 className="text-4xl md:text-5xl font-serif font-bold text-austin-navy mb-2">
-                  Today's Events
+                  Today&apos;s Events
                 </h2>
                 <p className="text-austin-navy/60 text-lg">
-                  Discover what's happening in Austin today
+                  Discover what&apos;s happening in Austin today
                 </p>
               </div>
             </div>

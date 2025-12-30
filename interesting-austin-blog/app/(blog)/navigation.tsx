@@ -55,7 +55,7 @@ export default function Navigation() {
                   : "text-austin-navy/70 hover:text-austin-navy"
               }`}
             >
-              <span className="hidden sm:inline">Today's Events</span>
+              <span className="hidden sm:inline">Today&apos;s Events</span>
               <span className="sm:hidden">Events</span>
             </Link>
             <Link

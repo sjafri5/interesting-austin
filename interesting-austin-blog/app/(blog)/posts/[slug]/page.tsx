@@ -90,7 +90,7 @@ export default async function PostPage({ params }: Props) {
               </Link>
               <span className="mx-2">/</span>
               <Link href="/" className="hover:text-austin-terracotta transition-colors">
-                Today's Events
+                Today&apos;s Events
               </Link>
               <span className="mx-2">/</span>
               <span className="text-austin-navy">{post.title}</span>

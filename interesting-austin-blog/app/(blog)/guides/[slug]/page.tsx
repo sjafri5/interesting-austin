@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 
 import Navigation from "../../navigation";
+import CoverImage from "../../cover-image";
 import PortableText from "../../portable-text";
 
 import * as demo from "@/sanity/lib/demo";
@@ -141,11 +142,7 @@ export default async function GuidePage({ params }: Props) {
             {/* Image */}
             {guide.img && (
               <div className="mb-12 rounded-lg overflow-hidden shadow-lg">
-                <img
-                  src={guide.img}
-                  alt={guide.title}
-                  className="w-full h-auto"
-                />
+                <CoverImage image={null} imageUrl={guide.img} priority={false} />
               </div>
             )}
 
