@@ -115,18 +115,20 @@ async function EventsStream() {
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
-      {events.map((event) => (
-        <EventCard
-          key={event._id}
-          _id={event._id}
-          title={event.title}
-          slug={event.slug}
-          excerpt={event.excerpt}
-          coverImage={event.coverImage}
-          img={event.img}
-          date={event.date}
-        />
-      ))}
+      {events
+        .filter((event) => event.title && event.slug)
+        .map((event) => (
+          <EventCard
+            key={event._id}
+            _id={event._id}
+            title={event.title}
+            slug={event.slug!}
+            excerpt={event.excerpt}
+            coverImage={event.coverImage}
+            img={event.img}
+            date={event.date}
+          />
+        ))}
     </div>
   );
 }
