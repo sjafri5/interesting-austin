@@ -11,6 +11,19 @@ import * as demo from "@/sanity/lib/demo";
 import { sanityFetch } from "@/sanity/lib/fetch";
 import { heroQuery, settingsQuery, moreStoriesQuery, guidesQuery } from "@/sanity/lib/queries";
 
+type GuideItem = {
+  _id: string;
+  status?: "draft" | "published";
+  title?: string;
+  slug?: string | null;
+  content?: string | null;
+  guideType?: string | null;
+  img?: string | null;
+  updatedAt?: string;
+  places?: Array<{ name?: string; slug?: { current?: string } | null; type?: string }> | null;
+  neighborhoods?: Array<{ name?: string; slug?: { current?: string } | null }> | null;
+};
+
 function HeroSection({
   title,
   description,
@@ -119,10 +132,10 @@ async function EventsStream() {
 }
 
 async function GuidesStream() {
-  const guides = await sanityFetch({
+  const guides = (await sanityFetch({
     query: guidesQuery,
     params: { limit: 6 },
-  });
+  })) as GuideItem[] | null;
 
   if (!guides || guides.length === 0) {
     return (

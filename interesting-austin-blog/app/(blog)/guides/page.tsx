@@ -6,11 +6,24 @@ import GuideCard from "../guide-card";
 import { sanityFetch } from "@/sanity/lib/fetch";
 import { guidesQuery } from "@/sanity/lib/queries";
 
+type GuideItem = {
+  _id: string;
+  status?: "draft" | "published";
+  title?: string;
+  slug?: string | null;
+  content?: string | null;
+  guideType?: string | null;
+  img?: string | null;
+  updatedAt?: string;
+  places?: Array<{ name?: string; slug?: { current?: string } | null; type?: string }> | null;
+  neighborhoods?: Array<{ name?: string; slug?: { current?: string } | null }> | null;
+};
+
 async function AllGuides() {
-  const guides = await sanityFetch({
+  const guides = (await sanityFetch({
     query: guidesQuery,
     params: { limit: 50 },
-  });
+  })) as GuideItem[] | null;
 
   if (!guides || guides.length === 0) {
     return (
