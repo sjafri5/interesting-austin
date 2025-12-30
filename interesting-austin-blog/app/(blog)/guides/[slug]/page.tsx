@@ -35,17 +35,33 @@ export async function generateMetadata(
     query: guideQuery,
     params,
     stega: false,
-  });
+  }) as {
+    title?: string;
+    content?: string | null;
+  } | null;
 
   return {
     title: guide?.title,
-    description: guide?.content?.substring(0, 160),
+    description: guide?.content ? guide.content.substring(0, 160) : undefined,
   } satisfies Metadata;
 }
 
+type GuideQueryResult = {
+  _id: string;
+  status?: "draft" | "published";
+  title?: string;
+  slug?: string | null;
+  content?: string | null;
+  guideType?: string | null;
+  img?: string | null;
+  updatedAt?: string;
+  places?: Array<{ name?: string; slug?: { current?: string } | null; type?: string }> | null;
+  neighborhoods?: Array<{ name?: string; slug?: { current?: string } | null }> | null;
+} | null;
+
 export default async function GuidePage({ params }: Props) {
   const [guide, settings] = await Promise.all([
-    sanityFetch({ query: guideQuery, params }),
+    sanityFetch({ query: guideQuery, params }) as Promise<GuideQueryResult>,
     sanityFetch({ query: settingsQuery }),
   ]);
 
@@ -69,7 +85,7 @@ export default async function GuidePage({ params }: Props) {
                 Guides
               </Link>
               <span className="mx-2">/</span>
-              <span className="text-austin-navy">{guide.title}</span>
+              <span className="text-austin-navy">{guide.title || "Untitled"}</span>
             </nav>
 
             {/* Guide Type Badge */}
@@ -83,7 +99,7 @@ export default async function GuidePage({ params }: Props) {
 
             {/* Title */}
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-serif font-bold text-austin-navy mb-6">
-              {guide.title}
+              {guide.title || "Untitled"}
             </h1>
 
             {/* Stats */}
