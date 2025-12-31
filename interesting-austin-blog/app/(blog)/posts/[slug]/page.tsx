@@ -10,7 +10,7 @@ import Navigation from "../../navigation";
 import CoverImage from "../../cover-image";
 import Avatar from "../../avatar";
 import PortableText from "../../portable-text";
-import EventCard from "../../event-card";
+import RedesignedEventCard from "../../redesigned-event-card";
 
 import * as demo from "@/sanity/lib/demo";
 import { sanityFetch } from "@/sanity/lib/fetch";
@@ -162,17 +162,17 @@ export default async function PostPage({ params }: Props) {
             </article>
 
             {/* Related Events */}
-            <aside className="mt-16 pt-12 border-t border-austin-cream/50">
+            <aside className="mt-8 pt-12 border-t border-austin-cream/50">
               <h2 className="text-3xl md:text-4xl font-serif font-bold text-austin-navy mb-8">
                 More Events
               </h2>
               <Suspense
                 fallback={
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
-                    {[1, 2].map((i) => (
+                  <div className="flex flex-col items-center gap-7 max-w-[700px] mx-auto">
+                    {[1, 2, 3].map((i) => (
                       <div
                         key={i}
-                        className="bg-white rounded-lg h-64 animate-pulse"
+                        className="bg-white rounded-lg h-64 w-full max-w-[500px] animate-pulse"
                       />
                     ))}
                   </div>
@@ -199,18 +199,16 @@ async function RelatedEvents({ skip }: { skip: string | null }) {
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
+    <div className="flex flex-col items-center max-w-[700px] mx-auto px-3 md:px-4 lg:px-0">
       {events
         .filter((event) => event.title && event.slug)
         .map((event) => (
-          <EventCard
+          <RedesignedEventCard
             key={event._id}
             _id={event._id}
             title={event.title}
             slug={event.slug!}
             excerpt={event.excerpt}
-            coverImage={event.coverImage}
-            img={event.img}
             date={event.date}
           />
         ))}
