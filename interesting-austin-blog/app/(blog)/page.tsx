@@ -190,34 +190,6 @@ export default async function Page() {
 
         {/* Main Content */}
         <main className="container mx-auto px-5 py-16">
-          {/* Today's Events Section */}
-          <section className="mb-20">
-            <div className="flex items-center justify-between mb-8">
-              <div>
-                <h2 className="text-4xl md:text-5xl font-serif font-bold text-austin-navy mb-2">
-                  Today&apos;s Events
-                </h2>
-                <p className="text-austin-navy/60 text-lg">
-                  Discover what&apos;s happening in Austin today
-                </p>
-              </div>
-            </div>
-            <Suspense
-              fallback={
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
-                  {[1, 2, 3, 4].map((i) => (
-                    <div
-                      key={i}
-                      className="bg-white rounded-lg h-64 animate-pulse"
-                    />
-                  ))}
-                </div>
-              }
-            >
-              <EventsStream />
-            </Suspense>
-          </section>
-
           {/* Essential Guides Section */}
           <section className="mb-20">
             <div className="flex items-center justify-between mb-8">
@@ -284,6 +256,34 @@ export default async function Page() {
                 </svg>
               </Link>
             </div>
+          </section>
+
+          {/* Today's Events Section */}
+          <section className="mb-20">
+            <div className="flex items-center justify-between mb-8">
+              <div>
+                <h2 className="text-4xl md:text-5xl font-serif font-bold text-austin-navy mb-2">
+                  Today&apos;s Events
+                </h2>
+                <p className="text-austin-navy/60 text-lg">
+                  Discover what&apos;s happening in Austin today
+                </p>
+              </div>
+            </div>
+            <Suspense
+              fallback={
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
+                  {[1, 2, 3, 4].map((i) => (
+                    <div
+                      key={i}
+                      className="bg-white rounded-lg h-64 animate-pulse"
+                    />
+                  ))}
+                </div>
+              }
+            >
+              <EventsStream />
+            </Suspense>
           </section>
         </main>
       </div>
