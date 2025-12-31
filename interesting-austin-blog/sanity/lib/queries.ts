@@ -48,7 +48,7 @@ const guideFields = /* groq */ `
 `;
 
 export const guidesQuery = defineQuery(`
-  *[_type == "guide" && defined(slug.current)] | order(_updatedAt desc) [0...$limit] {
+  *[_type == "guide" && defined(slug.current) && !(_id in path("drafts.**"))] | order(_updatedAt desc) [0...$limit] {
     ${guideFields}
   }
 `);

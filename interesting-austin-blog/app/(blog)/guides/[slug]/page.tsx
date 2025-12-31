@@ -1,5 +1,6 @@
 import { defineQuery } from "next-sanity";
 import type { Metadata, ResolvingMetadata } from "next";
+import { type PortableTextBlock, toPlainText } from "next-sanity";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 
@@ -37,12 +38,12 @@ export async function generateMetadata(
     stega: false,
   }) as {
     title?: string;
-    content?: string | null;
+    content?: PortableTextBlock[] | null;
   } | null;
 
   return {
     title: guide?.title,
-    description: guide?.content ? guide.content.substring(0, 160) : undefined,
+    description: guide?.content ? toPlainText(guide.content).substring(0, 160) : undefined,
   } satisfies Metadata;
 }
 
@@ -51,7 +52,7 @@ type GuideQueryResult = {
   status?: "draft" | "published";
   title?: string;
   slug?: string | null;
-  content?: string | null;
+  content?: PortableTextBlock[] | null;
   guideType?: string | null;
   img?: string | null;
   updatedAt?: string;
@@ -163,11 +164,12 @@ export default async function GuidePage({ params }: Props) {
             )}
 
             {/* Content */}
-            {guide.content && (
-              <div className="prose prose-lg max-w-none">
-                <div className="text-austin-navy/80 leading-relaxed whitespace-pre-line">
-                  {guide.content}
-                </div>
+            {guide.content && guide.content.length > 0 && (
+              <div className="prose prose-lg max-w-none mb-12">
+                <PortableText
+                  className="text-austin-navy/80 leading-relaxed"
+                  value={guide.content as PortableTextBlock[]}
+                />
               </div>
             )}
 

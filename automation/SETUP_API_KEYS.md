@@ -127,3 +127,4 @@ This means n8n can't access the environment variable. Solutions:
 - Share workflow JSON files with tokens embedded
 - Use the same token for multiple projects
 
+

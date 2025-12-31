@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
+import { type PortableTextBlock } from "next-sanity";
 
 import Navigation from "./navigation";
 import EventCard from "./event-card";
@@ -16,7 +17,7 @@ type GuideItem = {
   status?: "draft" | "published";
   title?: string;
   slug?: string | null;
-  content?: string | null;
+  content?: PortableTextBlock[] | null;
   guideType?: string | null;
   img?: string | null;
   updatedAt?: string;
@@ -139,6 +140,20 @@ async function GuidesStream() {
     params: { limit: 6 },
   })) as GuideItem[] | null;
 
+  // Debug: Log guides to see what we're getting
+  if (process.env.NODE_ENV === 'development') {
+    console.log('Guides fetched:', guides?.length || 0);
+    if (guides && guides.length > 0) {
+      console.log('First guide:', {
+        _id: guides[0]._id,
+        title: guides[0].title,
+        slug: guides[0].slug,
+        hasTitle: !!guides[0].title,
+        hasSlug: !!guides[0].slug,
+      });
+    }
+  }
+
   if (!guides || guides.length === 0) {
     return (
       <div className="text-center py-16 text-austin-navy/60">
@@ -147,24 +162,37 @@ async function GuidesStream() {
     );
   }
 
+  const validGuides = guides.filter((guide) => guide.title && guide.slug);
+  
+  if (validGuides.length === 0) {
+    return (
+      <div className="text-center py-16 text-austin-navy/60">
+        <p className="text-lg">No guides available at the moment.</p>
+        {process.env.NODE_ENV === 'development' && (
+          <p className="text-sm mt-2 text-austin-navy/40">
+            Found {guides.length} guides but none have both title and slug.
+          </p>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
-      {guides
-        .filter((guide) => guide.title && guide.slug)
-        .map((guide) => (
-          <GuideCard
-            key={guide._id}
-            _id={guide._id}
-            title={guide.title!}
-            slug={guide.slug!}
-            content={guide.content}
-            guideType={guide.guideType}
-            img={guide.img}
-            updatedAt={guide.updatedAt}
-            places={guide.places}
-            neighborhoods={guide.neighborhoods}
-          />
-        ))}
+      {validGuides.map((guide) => (
+        <GuideCard
+          key={guide._id}
+          _id={guide._id}
+          title={guide.title!}
+          slug={guide.slug!}
+          content={guide.content}
+          guideType={guide.guideType}
+          img={guide.img}
+          updatedAt={guide.updatedAt}
+          places={guide.places}
+          neighborhoods={guide.neighborhoods}
+        />
+      ))}
     </div>
   );
 }

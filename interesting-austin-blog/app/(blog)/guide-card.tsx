@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { format, parseISO } from "date-fns";
+import { type PortableTextBlock, toPlainText } from "next-sanity";
 
 import CoverImage from "./cover-image";
 
@@ -7,7 +8,7 @@ interface GuideCardProps {
   _id: string;
   title: string;
   slug: string;
-  content?: string | null;
+  content?: PortableTextBlock[] | string | null;
   guideType?: string | null;
   img?: string | null;
   updatedAt?: string | null;
@@ -48,7 +49,13 @@ export default function GuideCard({
   const neighborhoodCount = neighborhoods?.length || 0;
   const totalLocations = placeCount + neighborhoodCount;
   const updatedDate = formatDate(updatedAt);
-  const previewText = content?.substring(0, 120) || "";
+  
+  // Handle both Portable Text array and plain string for backward compatibility
+  const previewText = content
+    ? Array.isArray(content)
+      ? toPlainText(content).substring(0, 120)
+      : content.substring(0, 120)
+    : "";
 
   return (
     <article className="group">
@@ -119,4 +126,5 @@ export default function GuideCard({
     </article>
   );
 }
+
 

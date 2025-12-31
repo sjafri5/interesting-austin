@@ -209,3 +209,4 @@ export function createSanityClient() {
 // Export singleton instance for convenience
 export const sanityClient = createSanityClient()
 
+
